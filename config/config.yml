@@ -1,0 +1,78 @@
+dataset:
+  source: "arxiv"          # data provider
+  categories:
+    - id: "cs.LG"      # Machine Learning
+      weight: 4
+    - id: "cs.AI"      # Artificial Intelligence
+      weight: 4
+    - id: "cs.CL"      # NLP
+      weight: 4
+    - id: "cs.CV"      # Computer Vision
+      weight: 3
+    - id: "stat.ML"    # Statistical ML
+      weight: 3
+
+    - id: "cs.CR"      # Security
+      weight: 2
+    - id: "cs.DS"
+      weight: 2
+    - id: "cs.IR"
+      weight: 2
+    - id: "cs.RO"
+      weight: 2
+    - id: "cs.SE"
+      weight: 2
+    - id: "cs.NI"
+      weight: 2
+
+    - id: "physics.bio-ph"   # Biological Physics (this is THE biophysics category)
+      weight: 3
+    - id: "q-bio.BM"         # Biomolecules
+      weight: 1
+    - id: "q-bio.GN"         # Genomics
+      weight: 1
+    - id: "q-bio.NC"         # Neurons and Cognition
+      weight: 1
+    - id: "q-bio.SC"         # Subcellular processes (sometimes used in biophysics)
+      weight: 1
+    - id: "q-bio.CB"         # Cell behavior — extremely common in biophysics
+      weight: 3
+
+    - id: "physics.gen-ph"
+      weight: 1
+    - id: "physics.comp-ph"
+      weight: 1
+    - id: "physics.chem-ph"
+      weight: 1
+    - id: "physics.optics"
+      weight: 1
+
+    - id: "q-bio.BM"
+      weight: 1
+    - id: "q-bio.GN"
+      weight: 1
+    - id: "q-bio.NC"
+      weight: 1
+
+    - id: "econ.GN"
+      weight: 1
+    - id: "q-fin.EC"
+      weight: 1
+    - id: "q-fin.MF"
+      weight: 1
+    - id: "q-fin.ST"
+      weight: 1
+
+    - id: "eess.SP"
+      weight: 1
+    - id: "eess.SY"
+      weight: 1
+    - id: "eess.IV"
+      weight: 1
+
+  save_path: "data/raw/abstracts.jsonl"
+  recent_years: 5            # filter papers by year
+  max_papers: 5000          # total across categories (we can discuss strategy)
+  flush_every: 100         # for writing JSONL
+  batch_size: 100            # how many results per API request
+  request_sleep_seconds: 0.5 # delay between API requests
