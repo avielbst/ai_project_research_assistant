@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 import numpy as np
 import lancedb
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 import re
 from src.utils.config_loader import load_config, get_project_root
 
@@ -15,7 +15,7 @@ class RetrievedDoc:
     title: str
     abstract: str
     distance: float
-
+    rerank_score: Optional[float] = None
 
 def _truncate(text: str, max_chars: int) -> str:
     text = (text or "").strip().replace("\n", " ")
@@ -44,36 +44,22 @@ def truncate_by_sentences(text: str, max_chars: int) -> str:
 
     return " ".join(out).rstrip() + " …"
 
-def _format_context(docs: List[RetrievedDoc], max_total_chars: int) -> str:
-    blocks = []
+def _format_context(docs, max_chars: int) -> str:
+    chunks = []
     total = 0
-
-    for i, d in enumerate(docs, start=1):
+    for d in docs:
         block = (
-            f"Document {i}\n"
-            f"ID: {d.doc_id}\n"
+            f"DOC [{d.doc_id}]\n"
             f"Title: {d.title}\n"
-            f"Content:\n{d.abstract}"
+            f"Abstract: {d.abstract}\n"
         )
-
-        if max_total_chars > 0 and total + len(block) + 2 > max_total_chars:
+        if total + len(block) > max_chars:
             break
-
-        blocks.append(block)
-        total += len(block) + 2
-
-    return "\n\n---\n\n".join(blocks)
-
-
+        chunks.append(block)
+        total += len(block)
+    return "\n---\n".join(chunks)
 
 class Retriever:
-    """
-    Web-app friendly retriever:
-    - loads config
-    - opens LanceDB table
-    - loads embedding model once
-    """
-
     def __init__(self):
         self.project_root = get_project_root()
         self.cfg = load_config()
@@ -83,29 +69,71 @@ class Retriever:
         self.table_name = vs["table_name"]
         self.model_name = vs["embedding_model"]
 
-        self.top_k = int(vs.get("top_k", 5))
-        self.max_context_chars = int(vs.get("max_context_chars", 6000))
-        self.max_abs_chars = int(vs.get("max_abstract_chars_per_doc", 1200))
+        self.top_k = int(vs["top_k"])
+        self.initial_k = int(vs["initial_retrieval_k"])
+        self.max_context_chars = int(vs["max_context_chars"])
+        self.max_abs_chars = int(vs["max_abstract_chars_per_doc"])
+
+        # reranker config
+        self.use_reranker = bool(vs["use_reranker"])
+        self.reranker_model_name = vs["reranker_model"]
+        self.reranker_max_length = int(vs["reranker_max_length"])
 
         self.model = SentenceTransformer(self.model_name)
         self.db = lancedb.connect(str(self.db_dir))
         self.table = self.db.open_table(self.table_name)
 
+        self.reranker = None
+        if self.use_reranker:
+            self.reranker = CrossEncoder(self.reranker_model_name, max_length=self.reranker_max_length)
+
+    def _dedup_by_id_keep_best_distance(self, docs: List[RetrievedDoc]) -> List[RetrievedDoc]:
+        best: dict[str, RetrievedDoc] = {}
+        for d in docs:
+            prev = best.get(d.doc_id)
+            if prev is None or d.distance < prev.distance:
+                best[d.doc_id] = d
+        return list(best.values())
+
+    def _rerank(self, query: str, docs: List[RetrievedDoc]) -> List[RetrievedDoc]:
+        if not self.reranker or not docs:
+            return docs
+
+        pairs = [(f"Question: {query}", f"Paper title: {d.title}\nPaper abstract: {d.abstract}") for d in docs]
+
+        scores = self.reranker.predict(pairs)
+
+        rescored = [
+            RetrievedDoc(
+                doc_idx=d.doc_idx,
+                doc_id=d.doc_id,
+                title=d.title,
+                abstract=d.abstract,
+                distance=d.distance,
+                rerank_score=float(s),
+            )
+            for d, s in zip(docs, scores)
+        ]
+
+        rescored.sort(key=lambda x: x.rerank_score if x.rerank_score is not None else -1e9, reverse=True)
+        return rescored
+
     def retrieve(self, query: str, k: Optional[int] = None) -> Dict[str, Any]:
         k = self.top_k if k is None else int(k)
+        initial_k = max(self.initial_k, k)
 
         qv = self.model.encode([query], normalize_embeddings=True).astype(np.float32)[0]
 
         rows = (
             self.table.search(qv)
-            .limit(k)
+            .limit(initial_k)
             .select(["doc_idx", "id", "title", "abstract", "_distance"])
             .to_list()
         )
 
-        docs: List[RetrievedDoc] = []
+        candidates: List[RetrievedDoc] = []
         for r in rows:
-            docs.append(
+            candidates.append(
                 RetrievedDoc(
                     doc_idx=int(r["doc_idx"]),
                     doc_id=str(r["id"]),
@@ -115,10 +143,26 @@ class Retriever:
                 )
             )
 
+        candidates = self._dedup_by_id_keep_best_distance(candidates)
+
+        ranked = self._rerank(query, candidates)
+        final_docs = ranked[:k]
+
+        citations = []
+        seen = set()
+        for d in final_docs:
+            if d.doc_id in seen:
+                continue
+            seen.add(d.doc_id)
+            citations.append({
+                "id": d.doc_id,
+                "title": d.title,
+                "distance": d.distance,
+                "rerank_score": d.rerank_score
+            })
+
         return {
-            "retrieved_context": _format_context(docs, self.max_context_chars),
-            "citations": [
-                {"id": d.doc_id, "title": d.title, "distance": d.distance}
-                for d in docs
-            ],
+            "retrieved_context": _format_context(final_docs, self.max_context_chars),
+            "citations": citations,
+            "ranked": ranked,
         }

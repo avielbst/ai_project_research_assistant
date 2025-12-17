@@ -71,7 +71,7 @@ dataset:
       weight: 1
   save_path: "data/raw/abstracts.jsonl"
   recent_years: 5            # filter papers by year
-  max_papers: 5000          # total across categories (we can discuss strategy)
+  max_papers: 50000          # total across categories (we can discuss strategy)
   flush_every: 100         # for writing JSONL
   batch_size: 256            # how many results per API request
   request_sleep_seconds: 0.5 # delay between API requests
@@ -80,6 +80,20 @@ vector_store:
   db_dir: "data/index/lancedb"
   table_name: "papers"
   embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
-  top_k: 5
   max_context_chars: 6000
   max_abstract_chars_per_doc: 1200
+  # retrieve this many candidates before reranking
+  initial_retrieval_k: 100
+  # reranker
+  top_k: 10
+  use_reranker: true
+  reranker_model: "cross-encoder/ms-marco-MiniLM-L-12-v2"  # fast + strong baseline
+  reranker_max_length: 512
+
+llm:
+  provider: "ollama"
+  base_url: "http://localhost:11434/v1"
+  api_key: "ollama"  # not used by Ollama, but required by some clients
+  model: "qwen2.5:7b-instruct"
+  temperature: 0.2
+  max_tokens: 600

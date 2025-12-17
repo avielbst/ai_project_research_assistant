@@ -96,7 +96,7 @@ def main():
     if table is None:
         raise RuntimeError("No valid documents were indexed.")
 
-    print(f"✅ Indexed {kept} documents into {DB_DIR} / table '{TABLE}' (skipped {skipped})")
+    print(f"Indexed {kept} documents into {DB_DIR} / table '{TABLE}' (skipped {skipped})")
 
 
 if __name__ == "__main__":
