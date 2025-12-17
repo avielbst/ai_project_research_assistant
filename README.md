@@ -14,7 +14,7 @@
 - Citation grounding and answer validation
 - End-to-end ML system engineering
 
-![Web Application Example](assets/web_app_example.png)
+![Web Application Example](assets/research_assistant_img.png)
 
 ---
 
