@@ -18,7 +18,7 @@ def build_messages(user_query: str, retrieved_context: str):
         "- If the user requests a specific number of items (e.g., 'at least 5 advantages and disadvantages'), you MUST provide at least that many items.\n"
         "- If you cannot find enough supported items in the context, output as many as are supported and then add: 'Missing information:' stating how many more items are needed and what kind of sources would support them.\n"
         "- Each item must be explicitly supported by the context and include an inline citation.\n"
-        "- When listing multiple requested items, use inline numbering (e.g., 'Advantages: (1) ... (2) ...') rather than bullet points."
+        # "- When listing multiple requested items, use inline numbering (e.g., 'Advantages: (1) ... (2) ...') rather than bullet points."
         "- Choose exactly ONE label and keep it consistent throughout the answer:\n"
         "  (A) Supported by the sources\n"
         "  (B) Partially supported (related evidence, but not a direct answer)\n"
@@ -31,9 +31,10 @@ def build_messages(user_query: str, retrieved_context: str):
         "REQUIRED OUTPUT STRUCTURE:\n"
         "Start with a direct answer in 1–2 sentences that includes the chosen label (A/B/C).\n"
         "Then write a short explanatory paragraph grounded in the context (with inline citations).\n"
-        "Start a new row after the end of every sentence.\n"
+        # "The whole generated answer should aim to look like a paragraph with no titles and unnecessary breaks.\n"
+        # "Start a new row after the end of every sentence.\n"
         "If needed, add a short paragraph starting with 'Missing information:' describing what evidence is required.\n"
-        "End with: Sources used: [id1], [id2], ...\n"
+        "End with: Sources used in the following format '[doc_id]: [doc_title]'\n"
     )
 
     user = (

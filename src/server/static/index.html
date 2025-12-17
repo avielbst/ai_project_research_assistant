@@ -1,0 +1,177 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Gen AI Project</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; max-width: 920px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-top: 16px; }
+    textarea { width: 100%; height: 120px; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .muted { color: #666; font-size: 13px; }
+    .badge { padding: 2px 8px; border: 1px solid #ccc; border-radius: 999px; font-size: 12px; color: #444; }
+    .cit a { text-decoration: none; }
+    details { margin-top: 8px; }
+    pre { background: #f7f7f7; padding: 12px; overflow: auto; border-radius: 8px; }
+    button { padding: 8px 14px; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h2>Gen AI Project</h2>
+  <p class="muted">Ask a question about the academic abstracts in the dataset.</p>
+
+  <div class="card">
+    <label><b>Question</b></label>
+    <textarea id="q" placeholder="Type your question..."></textarea>
+    <div class="muted" style="margin-top:6px;">Tip: Ctrl+Enter (or Cmd+Enter) to submit.</div>
+
+    <div class="row" style="margin-top:10px;">
+      <label><b>Documents to use</b> <span class="muted">(1–10)</span></label>
+      <input id="k" type="range" min="1" max="10" value="5" />
+      <span id="kval" class="badge">5</span>
+
+      <label class="row" style="margin-left:auto;">
+        <input id="debug" type="checkbox" />
+        <span>Debug mode</span>
+      </label>
+
+      <button id="ask">Ask</button>
+    </div>
+
+    <div id="status" class="muted" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="card">
+    <h3>Answer</h3>
+    <div id="answer" class="muted">—</div>
+    <div class="row" style="margin-top:10px;">
+      <button id="copyAnswer">Copy answer</button>
+      <span id="coverage" class="badge" style="display:none;"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Citations</h3>
+    <div id="cits" class="muted">—</div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary><b>Retrieved Context</b> <span class="muted">(click to expand)</span></summary>
+      <pre id="ctx">—</pre>
+    </details>
+  </div>
+
+  <div class="card" id="debugCard" style="display:none;">
+    <h3>Debug JSON</h3>
+    <pre id="raw">—</pre>
+  </div>
+
+<script>
+  const k = document.getElementById('k');
+  const kval = document.getElementById('kval');
+  k.addEventListener('input', () => kval.textContent = k.value);
+
+  function escapeHtml(s) {
+    return (s ?? "").toString()
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;');
+  }
+
+  document.getElementById('copyAnswer').onclick = async () => {
+    const txt = document.getElementById('answer').innerText;
+    await navigator.clipboard.writeText(txt);
+  };
+
+  // Ctrl+Enter / Cmd+Enter submit
+  document.getElementById('q').addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      document.getElementById('ask').click();
+    }
+  });
+
+  document.getElementById('ask').onclick = async () => {
+    const askBtn = document.getElementById('ask');
+    const query = document.getElementById('q').value.trim();
+    const top_k = parseInt(k.value, 10);
+    const debug = document.getElementById('debug').checked;
+
+    if (!query) {
+      document.getElementById('status').innerText = "Please enter a question.";
+      return;
+    }
+
+    askBtn.disabled = true;
+
+    document.getElementById('status').innerText = "Thinking...";
+    document.getElementById('answer').innerText = "—";
+    document.getElementById('cits').innerText = "—";
+    document.getElementById('ctx').innerText = "—";
+    document.getElementById('raw').innerText = "—";
+    document.getElementById('coverage').style.display = "none";
+    document.getElementById('debugCard').style.display = debug ? 'block' : 'none';
+
+    let data = null;
+    try {
+      const resp = await fetch('/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, top_k, debug })
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+      }
+
+      data = await resp.json();
+    } catch (e) {
+      document.getElementById('status').innerText = `Error: ${e.message}`;
+      askBtn.disabled = false;
+      return;
+    }
+
+    document.getElementById('answer').innerText = data.answer ?? "—";
+
+    // citations
+    const cits = data.citations ?? [];
+    if (!cits.length) {
+      document.getElementById('cits').innerText = "No citations.";
+    } else {
+      document.getElementById('cits').innerHTML = cits.map(c => {
+        const title = escapeHtml(c.title || c.doc_id || '');
+        const id = escapeHtml(c.doc_id || '');
+        const extra = debug && (c.rerank_score != null || c.distance != null)
+          ? ` <span class="badge">rerank=${c.rerank_score ?? '—'} dist=${c.distance ?? '—'}</span>`
+          : '';
+        const link = c.url ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noreferrer">${title}</a>` : title;
+        return `<div class="cit">${link}<div class="muted">[${id}]</div>${extra}</div>`;
+      }).join('<hr style="border:none;border-top:1px solid #eee;margin:10px 0;">');
+    }
+
+    // context
+    const ctx = Array.isArray(data.retrieved_context)
+      ? data.retrieved_context.join("\n\n")
+      : (data.retrieved_context || "");
+    document.getElementById('ctx').innerText = ctx || "—";
+
+    // debug JSON
+    if (debug) {
+      document.getElementById('raw').innerText = JSON.stringify(data, null, 2);
+    }
+
+    // optional coverage
+    if (data.coverage) {
+      const cov = document.getElementById('coverage');
+      cov.style.display = 'inline-block';
+      cov.innerText = `Coverage: ${data.coverage}`;
+    }
+
+    document.getElementById('status').innerText = "";
+    askBtn.disabled = false;
+  };
+</script>
+</body>
+</html>
