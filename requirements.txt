@@ -3,3 +3,7 @@ pyarrow
 sentence-transformers
 numpy
 openai
+llama-cpp-python==0.2.83
+fastapi
+uvicorn[standard]
+pydantic

@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+.venv/
+.env
+.vscode/
+.idea/
+
+.git/
+.gitignore
+
+.DS_Store
+Thumbs.db
+*.log
+
+# Do not bake large assets into the image
+*.gguf
+models/
+
+# Mount data instead of copying it
+data/
