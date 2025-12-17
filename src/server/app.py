@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any, List, Set, Dict, Optional
 import re
 
 from fastapi import FastAPI, HTTPException
@@ -16,7 +16,7 @@ from src.rag.generator import AnswerGenerator
 CITATION_RE = re.compile(r"\[(\d{4}\.\d{5}v\d+)\]")  # e.g. [2510.02964v1]
 DOC_SPLIT_RE = re.compile(r"\n---\n")               # matches your _format_context separator
 DOC_ID_RE = re.compile(r"^DOC\s+\[(.*?)\]\s*$", re.MULTILINE)
-app = FastAPI(title="GenAI RAG App", lifespan=lifespan)
+app = FastAPI(title="Research Assistant - Aviel", lifespan=lifespan)
 
 def extract_used_ids(answer: str) -> List[str]:
     # preserve order, unique
